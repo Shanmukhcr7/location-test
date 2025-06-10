@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Restaurant Delivery Distance</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            text-align: center;
+        }
+        #status {
+            margin-top: 20px;
+            font-size: 1.1em;
+            color: #333;
+        }
+        #result {
+            margin-top: 15px;
+            font-size: 1.2em;
+            font-weight: bold;
+            color: #007BFF;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Restaurant Delivery Distance Checker</h1>
+    <button onclick="getUserLocationAndCalculateDistance()">Check Delivery Distance</button>
+    <p id="status">Click the button to check your distance from the restaurant.</p>
+    <div id="result"></div>
+
+    <script>
+        // Your Google Maps API Key
+        const Maps_API_KEY = 'AIzaSyArLGgPN9nOzUOORNUBGUCnW5tGxc5UB3Q';
+
+        // Restaurant's location (DAWATH restaurant in Miryalaguda)
+        const RESTAURANT_LOCATION = {
+            lat: 16.863166, // Latitude
+            lng: 79.554994  // Longitude
+        };
+
+        const DELIVERY_RADIUS_KM = 5; // Maximum delivery radius in kilometers
+
+        let mapLoaded = false; // Flag to ensure map API is loaded
+
+        // This function will be called once the Google Maps API script is loaded
+        function initMap() {
+            mapLoaded = true;
+            console.log("Google Maps API loaded successfully.");
+            document.getElementById('status').innerText = 'Google Maps API is ready. Click the button to check distance.';
+        }
+
+        function getUserLocationAndCalculateDistance() {
+            if (!mapLoaded) {
+                document.getElementById('status').innerText = 'Google Maps API is still loading... Please wait a moment and try again.';
+                console.warn("Google Maps API not yet loaded.");
+                return;
+            }
+
+            document.getElementById('status').innerText = 'Detecting your location...';
+            document.getElementById('result').innerText = ''; // Clear previous result
+
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        const userLat = position.coords.latitude;
+                        const userLon = position.coords.longitude;
+                        document.getElementById('status').innerText = `Detected Location: Lat: ${userLat.toFixed(6)}, Lon: ${userLon.toFixed(6)}`;
+                        calculateDistance(userLat, userLon);
+                    },
+                    (error) => {
+                        let errorMessage = 'Error getting your location: ';
+                        switch (error.code) {
+                            case error.PERMISSION_DENIED:
+                                errorMessage += "User denied the request for Geolocation.";
+                                break;
+                            case error.POSITION_UNAVAILABLE:
+                                errorMessage += "Location information is unavailable.";
+                                break;
+                            case error.TIMEOUT:
+                                errorMessage += "The request to get user location timed out.";
+                                break;
+                            case error.UNKNOWN_ERROR:
+                                errorMessage += "An unknown error occurred.";
+                                break;
+                        }
+                        document.getElementById('status').innerText = errorMessage;
+                        document.getElementById('result').style.color = 'red';
+                        document.getElementById('result').innerText = 'Cannot calculate distance without your location.';
+                        console.error('Geolocation Error:', error);
+                    },
+                    {
+                        enableHighAccuracy: true,
+                        timeout: 10000,
+                        maximumAge: 0
+                    }
+                );
+            } else {
+                document.getElementById('status').innerText = 'Geolocation is not supported by this browser.';
+                document.getElementById('result').style.color = 'red';
+                document.getElementById('result').innerText = 'Please use a modern browser that supports geolocation.';
+            }
+        }
+
+        function calculateDistance(userLat, userLon) {
+            const service = new google.maps.DistanceMatrixService();
+
+            const origin = new google.maps.LatLng(userLat, userLon);
+            const destination = new google.maps.LatLng(RESTAURANT_LOCATION.lat, RESTAURANT_LOCATION.lng);
+
+            service.getDistanceMatrix(
+                {
+                    origins: [origin],
+                    destinations: [destination],
+                    travelMode: google.maps.TravelMode.DRIVING, // or WALKING, BICYCLING
+                    unitSystem: google.maps.UnitSystem.METRIC,
+                    avoidHighways: false,
+                    avoidTolls: false,
+                },
+                (response, status) => {
+                    const resultDiv = document.getElementById('result');
+                    if (status === 'OK') {
+                        const results = response.rows[0].elements;
+                        if (results && results[0] && results[0].status === 'OK') {
+                            const distanceInMeters = results[0].distance.value; // Distance in meters
+                            const distanceText = results[0].distance.text;       // Formatted distance string (e.g., "24.1 km")
+                            const durationText = results[0].duration.text;       // Formatted duration string (e.g., "35 mins")
+
+                            const distanceInKm = distanceInMeters / 1000;
+
+                            let message = `Distance: ${distanceText} (Approx. Travel Time: ${durationText})`;
+
+                            if (distanceInKm <= DELIVERY_RADIUS_KM) {
+                                message += `<br>You are within our delivery zone!`;
+                                resultDiv.style.color = 'green';
+                            } else {
+                                message += `<br>Sorry, you are outside our delivery zone (Max ${DELIVERY_RADIUS_KM} km).`;
+                                resultDiv.style.color = 'red';
+                            }
+                            resultDiv.innerHTML = message;
+                        } else {
+                            resultDiv.style.color = 'red';
+                            resultDiv.innerText = 'Could not find a route to the restaurant. ' + (results[0] ? results[0].status : 'Unknown error.');
+                            console.error('Distance Matrix Result Status:', results[0].status);
+                        }
+                    } else {
+                        resultDiv.style.color = 'red';
+                        resultDiv.innerText = `Error calculating distance: ${status}`;
+                        console.error('Distance Matrix Error:', status);
+                    }
+                }
+            );
+        }
+    </script>
+
+    <script async defer
+        src="https://maps.googleapis.com/maps/api/js?key=AIzaSyArLGgPN9nOzUOORNUBGUCnW5tGxc5UB3Q&libraries=geometry&callback=initMap">
+    </script>
+
+</body>
+</html>
